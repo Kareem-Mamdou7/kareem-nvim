@@ -193,3 +193,18 @@ vim.keymap.set("n", "<leader>gD", function()
     print("✅ Repo '" .. repo .. "' deleted from GitHub.")
   end
 end, { desc = "GitHub: Delete Current Remote Repo" })
+
+vim.keymap.set("n", "<leader>cw", function()
+  vim.ui.input({ prompt = "Word to replace:" }, function(old_word)
+    if not old_word or old_word == "" then
+      return
+    end
+    vim.ui.input({ prompt = "Replace with:" }, function(new_word)
+      if new_word == nil then
+        return
+      end
+      local cmd = string.format("%%s/%s/%s/g", vim.fn.escape(old_word, "/\\"), vim.fn.escape(new_word, "/\\"))
+      vim.cmd(cmd)
+    end)
+  end)
+end, { desc = "Global substitute with input", noremap = true, silent = true })
