@@ -1,9 +1,16 @@
 -- bootstrap lazy.nvim, LazyVim and your plugins
 require("config.lazy")
 
--- vim.cmd("colorscheme darkplus")
--- vim.cmd("colorscheme catppuccin")
-vim.cmd("colorscheme vscode")
+if not vim.g.vscode then
+  -- Only load colorscheme when not inside VSCode
+  vim.cmd("colorscheme vscode")
+  -- vim.cmd("colorscheme darkplus")
+  -- vim.cmd("colorscheme catppuccin")
+
+  -- Any UI-specific config
+  -- require("statusline").setup()
+  -- require("lualine").setup()
+end
 
 vim.opt.termguicolors = true
 

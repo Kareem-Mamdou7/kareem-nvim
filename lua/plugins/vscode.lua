@@ -4,11 +4,10 @@ return {
   priority = 1000,
   config = function()
     require("vscode").setup({
-      -- Enable transparent background
-      transparent = false,
+      transparent = false, -- true to disable background
       italic_comments = true,
       disable_nvimtree_bg = true,
     })
-    require("vscode").load()
+    vim.cmd("colorscheme vscode")
   end,
 }
