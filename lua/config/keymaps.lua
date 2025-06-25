@@ -5,4 +5,5 @@
 require("keymaps.util")
 require("keymaps.run")
 require("keymaps.flutter")
-require("keymaps.git")
+require("keymaps.git.local")
+require("keymaps.git.github")
