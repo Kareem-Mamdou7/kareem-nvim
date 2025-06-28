@@ -109,3 +109,12 @@ map("n", "<leader>gL", function()
   end
   vim.cmd("terminal lazygit")
 end, { desc = "Git: LazyGit (popup)", unpack(opts) })
+
+vim.keymap.set("n", "<leader>dv", function()
+  local dv = require("diffview.lib")
+  if next(dv.views) == nil then
+    vim.cmd("DiffviewOpen")
+  else
+    vim.cmd("DiffviewClose")
+  end
+end, { desc = "Toggle Diffview" })
