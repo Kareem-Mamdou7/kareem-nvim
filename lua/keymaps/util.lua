@@ -17,3 +17,18 @@ map("n", "<leader>cw", function()
     end)
   end)
 end, { desc = "Global substitute with input", unpack(opts) })
+
+vim.keymap.set({ "n", "v" }, "<leader>C", function()
+  local mode = vim.fn.mode()
+  if mode == "v" or mode == "V" or mode == "" then
+    -- Already in visual mode, just export
+    vim.cmd("CarbonNow")
+  else
+    -- Not in visual mode: select all, then export
+    vim.cmd("normal! ggVG") -- Select the whole buffer
+    vim.cmd("CarbonNow")
+  end
+end, {
+  desc = "Export selection or whole buffer to Carbon image",
+  silent = true,
+})
