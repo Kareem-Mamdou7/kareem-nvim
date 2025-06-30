@@ -4,23 +4,27 @@ vim.keymap.set("n", "<leader>r", function()
   local filename = vim.fn.expand("%:p")
   local output_name = vim.fn.expand("%:p:r") .. "_out"
   local file_ext = vim.fn.expand("%:e")
-  local cwd = vim.fn.getcwd() -- Use Neovim's current working directory instead of file directory
-  local function escape(name)
-    return name:gsub(" ", "\\ ")
+  local cwd = vim.fn.getcwd()
+
+  local function escape(str)
+    return str:gsub(" ", "\\ ")
   end
+
   local function term(cmd)
     vim.cmd('split | terminal bash -c "' .. cmd .. '"')
     vim.cmd("normal! G")
   end
+
   local function open_browser()
     vim.fn.jobstart({ "xdg-open", "http://127.0.0.1:5500" }, { detach = true })
   end
+
   local function check_live_server_sync()
-    -- Synchronous check using vim.fn.system
     local result = vim.fn.system("pgrep -f live-server")
     local is_running = vim.v.shell_error == 0 and result:match("%S") ~= nil
     return is_running
   end
+
   local function live_server_logic()
     local is_running = check_live_server_sync()
 
@@ -36,20 +40,27 @@ vim.keymap.set("n", "<leader>r", function()
         end
       end)
     else
-      vim.fn.jobstart({ "live-server", "--port=5500", "--no-browser", cwd }, { cwd = cwd, detach = true })
+      vim.fn.jobstart({
+        "live-server",
+        "--port=5500",
+        "--no-browser",
+        "--ignore=node_modules,.git,dist,build,*.zip,*.svg,*.psd",
+        cwd,
+      }, { cwd = cwd, detach = true })
       vim.defer_fn(function()
         open_browser()
       end, 500)
       print("Live Server started on http://127.0.0.1:5500")
     end
   end
+
   if filetype == "cpp" then
     term(
       "g++ -std=c++17 -Wall -Wextra -o "
         .. escape(output_name)
         .. " "
         .. escape(filename)
-        .. " && "
+        .. " && ./"
         .. escape(output_name)
     )
   elseif filetype == "python" then
@@ -84,7 +95,7 @@ vim.keymap.set("n", "<leader>r", function()
     vim.notify("No run command for this filetype", vim.log.levels.WARN)
   end
 end, { desc = "Run file based on type" })
--- ✅ Stop live-server when exiting Neovim
+
 vim.api.nvim_create_autocmd("VimLeavePre", {
   callback = function()
     vim.fn.jobstart({ "pkill", "-f", "live-server" }, { detach = true })
