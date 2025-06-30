@@ -11,86 +11,76 @@ vim.keymap.set("n", "<leader>r", function()
   end
 
   local function term(cmd)
-    vim.cmd('split | terminal bash -c "' .. cmd .. '"')
-    vim.cmd("normal! G")
+    vim.fn.jobstart(cmd, { detach = true })
   end
 
   local function open_browser()
-    vim.fn.jobstart({ "xdg-open", "http://127.0.0.1:5500" }, { detach = true })
+    vim.fn.jobstart({ "xdg-open", "http://localhost:5173" }, { detach = true })
   end
 
-  local function check_live_server_sync()
-    local result = vim.fn.system("pgrep -f live-server")
-    local is_running = vim.v.shell_error == 0 and result:match("%S") ~= nil
-    return is_running
+  local function is_vite_running()
+    local result = vim.fn.system("pgrep -f vite")
+    return vim.v.shell_error == 0 and result:match("%S") ~= nil
   end
 
-  local function live_server_logic()
-    local is_running = check_live_server_sync()
-
-    if is_running then
-      vim.ui.select({ "Open in Browser", "Stop Live Server" }, {
-        prompt = "Live Server is running. Choose an action:",
+  local function vite_server_logic()
+    if is_vite_running() then
+      vim.ui.select({ "Open in Browser", "Stop Vite" }, {
+        prompt = "Vite is running. Choose an action:",
       }, function(choice)
         if choice == "Open in Browser" then
           open_browser()
-        elseif choice == "Stop Live Server" then
-          vim.fn.jobstart({ "pkill", "-f", "live-server" }, { detach = true })
-          print("Live Server stopped.")
+        elseif choice == "Stop Vite" then
+          vim.fn.jobstart({ "pkill", "-f", "vite" }, { detach = true })
+          print("Vite stopped.")
         end
       end)
     else
-      vim.fn.jobstart({
-        "live-server",
-        "--port=5500",
-        "--no-browser",
-        "--ignore=node_modules,.git,dist,build,*.zip,*.svg,*.psd",
-        cwd,
-      }, { cwd = cwd, detach = true })
+      vim.fn.jobstart({ "vite" }, { cwd = cwd, detach = true })
       vim.defer_fn(function()
         open_browser()
-      end, 500)
-      print("Live Server started on http://127.0.0.1:5500")
+      end, 1500)
+      print("Vite started on http://localhost:5173")
     end
   end
 
+  -- Filetype routing
   if filetype == "cpp" then
-    term(
-      "g++ -std=c++17 -Wall -Wextra -o "
-        .. escape(output_name)
-        .. " "
-        .. escape(filename)
-        .. " && ./"
-        .. escape(output_name)
-    )
+    term({
+      "bash",
+      "-c",
+      "g++ -std=c++17 -Wall -Wextra -o " .. escape(output_name) .. " " .. escape(filename) .. " && ./" .. escape(
+        output_name
+      ),
+    })
   elseif filetype == "python" then
-    term("python " .. escape(filename))
+    term({ "python", filename })
   elseif file_ext == "ipynb" then
-    term("jupyter notebook " .. escape(filename))
-  elseif filetype == "html" or filetype == "css" then
-    live_server_logic()
-  elseif filetype == "javascript" then
-    vim.ui.select({ "Browser (Live Server)", "Terminal (Node)" }, {
-      prompt = "Run JavaScript in:",
-    }, function(choice)
-      if choice == "Browser (Live Server)" then
-        live_server_logic()
-      elseif choice == "Terminal (Node)" then
-        term("node " .. escape(filename))
-      end
-    end)
+    term({ "jupyter", "notebook", filename })
+  elseif
+    filetype == "html"
+    or filetype == "css"
+    or filetype == "javascript"
+    or filetype == "typescript"
+    or filetype == "vue"
+    or filetype == "javascriptreact"
+    or filetype == "typescriptreact"
+  then
+    vite_server_logic()
   elseif filetype == "dart" then
     vim.cmd("FlutterRun")
     vim.defer_fn(function()
       vim.cmd("wincmd p")
     end, 100)
   elseif file_ext == "ino" then
-    term(
+    term({
+      "bash",
+      "-c",
       "arduino-cli compile --fqbn arduino:avr:uno "
         .. escape(filename)
         .. " && arduino-cli upload -p /dev/ttyACM0 --fqbn arduino:avr:uno "
-        .. escape(filename)
-    )
+        .. escape(filename),
+    })
   else
     vim.notify("No run command for this filetype", vim.log.levels.WARN)
   end
@@ -98,6 +88,6 @@ end, { desc = "Run file based on type" })
 
 vim.api.nvim_create_autocmd("VimLeavePre", {
   callback = function()
-    vim.fn.jobstart({ "pkill", "-f", "live-server" }, { detach = true })
+    vim.fn.jobstart({ "pkill", "-f", "vite" }, { detach = true })
   end,
 })
