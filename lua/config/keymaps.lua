@@ -3,8 +3,8 @@
 -- Add any additional keymaps here
 
 require("keymaps.util")
-require("keymaps.run")
 require("keymaps.flutter")
 require("keymaps.git.local")
 require("keymaps.git.github")
 require("keymaps.git.reset")
+require("keymaps.runner.keybinding") -- if you want access to utility functions
