@@ -4,8 +4,15 @@ local escape = function(str)
   return str:gsub(" ", "\\ ")
 end
 
+-- Create visible terminal and run command
 local function term(cmd)
-  vim.fn.jobstart(cmd, { detach = true })
+  -- Open a split terminal at the bottom
+  vim.cmd("botright split | resize 15")
+  vim.cmd("enew") -- Open a new empty buffer
+
+  -- Set it to terminal mode and run the command
+  vim.fn.termopen(cmd)
+  vim.cmd("startinsert")
 end
 
 local function open_browser()
