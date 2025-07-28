@@ -29,7 +29,7 @@ local function is_react_project(path)
   return content:match('"react"%s*:') or content:match('"react%-dom"%s*:') or content:match('"vite"%s*:') ~= nil
 end
 
--- Run a background job
+-- Run background job detached
 local function run_background(cmd, opts)
   opts = opts or {}
   opts.cwd = opts.cwd or vim.fn.getcwd()
@@ -37,8 +37,12 @@ local function run_background(cmd, opts)
   vim.fn.jobstart(cmd, opts)
 end
 
--- npm install if node_modules is missing
+-- Auto npm install
 local function ensure_dependencies_installed(root)
+  local package_json = root .. "/package.json"
+  if vim.fn.filereadable(package_json) == 0 then
+    return
+  end
   local node_modules_path = root .. "/node_modules"
   if vim.fn.isdirectory(node_modules_path) == 0 then
     vim.notify("node_modules missing. Running npm install...", vim.log.levels.INFO)
@@ -51,9 +55,44 @@ local function ensure_dependencies_installed(root)
   end
 end
 
--- Start vite dev server
+-- Generate index.html for plain Vite
+local function create_default_index_html(root)
+  local index_path = root .. "/index.html"
+  if vim.fn.filereadable(index_path) == 0 then
+    local html_files = vim.fn.glob(root .. "/*.html", false, true)
+    local links = {}
+    for _, file in ipairs(html_files) do
+      local name = vim.fn.fnamemodify(file, ":t")
+      table.insert(links, '<li><a href="' .. name .. '">' .. name .. "</a></li>")
+    end
+    local content = [[
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Index</title>
+  </head>
+  <body>
+    <h1>Project Files</h1>
+    <ul>
+]] .. table.concat(links, "\n") .. [[
+    </ul>
+  </body>
+</html>]]
+
+    local file = io.open(index_path, "w")
+    if file then
+      file:write(content)
+      file:close()
+      vim.notify("📝 index.html was created automatically.", vim.log.levels.INFO)
+    end
+  end
+end
+
+-- Start vite server
 local function start_dev_server(root, port)
   port = port or "5173"
+  create_default_index_html(root)
   local cmd = "vite --port " .. port
   run_background({ "bash", "-l", "-c", cmd }, { cwd = root })
   react_server_running = true
@@ -61,7 +100,7 @@ local function start_dev_server(root, port)
   vim.notify("Dev server started on http://localhost:" .. port, vim.log.levels.INFO)
 end
 
--- Main run logic
+-- Main runner
 vim.keymap.set("n", "<leader>r", function()
   vim.cmd("write")
 
@@ -81,7 +120,7 @@ vim.keymap.set("n", "<leader>r", function()
         .. runner.escape(output_name)
         .. " "
         .. runner.escape(filename)
-        .. " && ./"
+        .. " && "
         .. runner.escape(output_name),
     })
   elseif filetype == "python" then
@@ -101,7 +140,6 @@ vim.keymap.set("n", "<leader>r", function()
       end
       local command = choice:match("run (%w+)")
       ensure_dependencies_installed(root)
-
       if command == "dev" then
         run_background({ "npm", "run", command, "--", "--port", "5173" }, { cwd = root })
         run_background({ "xdg-open", "http://localhost:5173" })
@@ -111,9 +149,6 @@ vim.keymap.set("n", "<leader>r", function()
       end
     end)
   elseif vim.tbl_contains({ "javascript", "html", "css" }, filetype) then
-    local index_path = cwd .. "/index.html"
-    local has_index = vim.fn.filereadable(index_path) ~= 0
-
     if is_react then
       vim.ui.select({
         "npm run dev",
@@ -126,7 +161,6 @@ vim.keymap.set("n", "<leader>r", function()
         end
         local command = choice:match("run (%w+)")
         ensure_dependencies_installed(root)
-
         if command == "dev" then
           run_background({ "npm", "run", command, "--", "--port", "5173" }, { cwd = root })
           run_background({ "xdg-open", "http://localhost:5173" })
@@ -135,39 +169,24 @@ vim.keymap.set("n", "<leader>r", function()
           run_background({ "npm", "run", command }, { cwd = root })
         end
       end)
-    elseif has_index then
-      if react_server_running then
-        vim.ui.select(
-          { "Open browser tab", "Kill dev server" },
-          { prompt = "Dev server is already running" },
-          function(choice)
-            if choice == "Open browser tab" then
-              run_background({ "xdg-open", "http://localhost:5173" })
-            elseif choice == "Kill dev server" then
-              run_background({ "pkill", "-f", "vite" })
-              react_server_running = false
-              vim.notify("Dev server killed", vim.log.levels.INFO)
-            end
-          end
-        )
-      else
-        vim.ui.select({ "Run with Vite", "Run with Node.js (no browser)" }, {
-          prompt = "Run JS project:",
-        }, function(choice)
+    else
+      if filetype == "javascript" then
+        vim.ui.select({
+          "Run JS with Node.js (terminal)",
+          "Run index.html with Vite (browser)",
+        }, { prompt = "JS File: Choose run option" }, function(choice)
           if not choice then
             return
           end
-
-          if choice == "Run with Vite" then
-            ensure_dependencies_installed(cwd)
+          if choice:match("Node") then
+            runner.term({ "node", filename })
+          elseif choice:match("Vite") then
             start_dev_server(cwd, "5173")
-          elseif choice == "Run with Node.js (no browser)" then
-            run_background({ "node", filename }, { cwd = cwd })
           end
         end)
+      else
+        start_dev_server(cwd, "5173")
       end
-    else
-      run_background({ "node", filename }, { cwd = cwd })
     end
   elseif filetype == "dart" then
     vim.cmd("FlutterRun")
@@ -189,7 +208,7 @@ vim.keymap.set("n", "<leader>r", function()
   end
 end, { desc = "Run project based on file type" })
 
--- Kill servers on exit
+-- Kill vite and npm dev servers when Neovim exits
 vim.api.nvim_create_autocmd("VimLeavePre", {
   callback = function()
     run_background({ "pkill", "-f", "vite" })
