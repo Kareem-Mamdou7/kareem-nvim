@@ -6,22 +6,6 @@ map("n", "<leader>cx", "<cmd>CellularAutomaton make_it_rain<CR>", {
   desc = "Make it rain",
 })
 
--- 🔁 Mapping: Prompted substitution with confirmation
-map("n", "<leader>cw", function()
-  vim.ui.input({ prompt = "Word to replace:" }, function(old_word)
-    if not old_word or old_word == "" then
-      return
-    end
-    vim.ui.input({ prompt = "Replace with:" }, function(new_word)
-      if new_word == nil then
-        return
-      end
-      local cmd = string.format("%%s/%s/%s/gc", vim.fn.escape(old_word, "/\\"), vim.fn.escape(new_word, "/\\"))
-      vim.cmd(cmd)
-    end)
-  end)
-end, { desc = "Global substitute with confirmation", unpack(opts) })
-
 -- 🔁 Mapping: Manual substitution with confirmation (global)
 map("n", "<leader>r", ":%s///gc<Left><Left><Left>", {
   desc = "Manual global replace with confirm",
