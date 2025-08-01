@@ -1,4 +1,6 @@
--- bootstrap lazy.nvim, LazyVim and your plugins
+-- bootstrap lazy.nvim, LazyVim and your plugins_required
+--
+
 require("config.lazy")
 
 if not vim.g.vscode then
@@ -12,6 +14,7 @@ if not vim.g.vscode then
   -- require("lualine").setup()
 end
 
+vim.o.scrolloff = 9
 vim.opt.termguicolors = true
 
 require("lspconfig").arduino_language_server.setup({

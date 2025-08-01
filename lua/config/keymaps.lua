@@ -8,3 +8,4 @@ require("keymaps.git.local")
 require("keymaps.git.github")
 require("keymaps.git.reset")
 require("keymaps.runner.keybinding") -- if you want access to utility functions
+require("keymaps.tsc_watch")
