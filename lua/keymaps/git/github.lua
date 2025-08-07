@@ -15,103 +15,135 @@ local function run_cmd(cmd)
   return result
 end
 
-map("n", "<leader>gr", function()
-  if not is_git_repo() then
-    print("Initializing Git repo...")
-    if not run_cmd("git init") then
-      return
-    end
+-- Helper to initialize local Git repo
+local function init_local_git()
+  if is_git_repo() then
+    print("Already a Git repository.")
+    return
   end
+  if run_cmd("git init") then
+    print("Local Git repo initialized.")
+  end
+end
 
-  vim.ui.input({ prompt = "GitHub repo name: " }, function(repo)
-    if not repo or repo == "" then
-      print("Canceled: No repo name.")
+-- Main <leader>gr logic
+map("n", "<leader>gr", function()
+  vim.ui.select({ "Create GitHub Repo", "Init Local Git Repo Only" }, {
+    prompt = "Select Git action:",
+  }, function(choice)
+    if not choice then
+      print("Canceled.")
       return
     end
 
-    vim.ui.input({ prompt = "Visibility (1 = Public, 0 = Private): " }, function(visibility)
-      local vis_flag = "--public"
-      if visibility == "0" then
-        vis_flag = "--private"
-      end
-      if visibility ~= "0" and visibility ~= "1" then
-        print("Invalid input. Use 1 or 0.")
-        return
-      end
-
-      local remotes = vim.fn.systemlist("git remote")
-      if vim.tbl_contains(remotes, "origin") then
-        if not run_cmd("git remote remove origin") then
+    -- === Option 1: Create GitHub Repo ===
+    if choice == "Create GitHub Repo" then
+      if not is_git_repo() then
+        print("Initializing Git repo...")
+        if not run_cmd("git init") then
           return
         end
       end
 
-      local readme_path = "README.md"
-      local readme_content = "# " .. repo .. "\n\nCreated via Neovim automation."
-      vim.fn.writefile(vim.split(readme_content, "\n"), readme_path)
-
-      vim.ui.input({ prompt = "Commit message: " }, function(commit_msg)
-        if not commit_msg or #commit_msg == 0 then
-          print("Canceled: No commit message.")
+      vim.ui.input({ prompt = "GitHub repo name: " }, function(repo)
+        if not repo or repo == "" then
+          print("Canceled: No repo name.")
           return
         end
 
-        if not run_cmd("git add .") then
-          return
-        end
-        if not run_cmd('git commit -m "' .. commit_msg .. '"') then
-          return
-        end
-        if not run_cmd("git branch -M main") then
-          return
-        end
+        vim.ui.input({ prompt = "Visibility (1 = Public, 0 = Private): " }, function(visibility)
+          local vis_flag = visibility == "0" and "--private" or "--public"
+          if visibility ~= "0" and visibility ~= "1" then
+            print("Invalid input. Use 1 or 0.")
+            return
+          end
 
-        local create_cmd = string.format('gh repo create "%s" %s --source=. --remote=origin --push', repo, vis_flag)
-        if not run_cmd(create_cmd) then
-          return
-        end
+          -- Remove origin if it already exists
+          local remotes = vim.fn.systemlist("git remote")
+          if vim.tbl_contains(remotes, "origin") then
+            print("Removing existing origin...")
+            if not run_cmd("git remote remove origin") then
+              return
+            end
+          end
 
-        local open_cmd = string.format('gh repo view "%s" --web', repo)
-        if not run_cmd(open_cmd) then
-          return
-        end
+          -- Create README if missing
+          local readme_path = "README.md"
+          if vim.fn.filereadable(readme_path) == 0 then
+            local content = "# " .. repo .. "\n\nCreated via Neovim automation."
+            vim.fn.writefile(vim.split(content, "\n"), readme_path)
+          end
 
-        print("GitHub repo created, pushed, and opened in browser.")
+          vim.ui.input({ prompt = "Commit message: " }, function(commit_msg)
+            if not commit_msg or commit_msg == "" then
+              print("Canceled: No commit message.")
+              return
+            end
+
+            if not run_cmd("git add .") then
+              return
+            end
+            if not run_cmd('git commit -m "' .. commit_msg .. '"') then
+              return
+            end
+            run_cmd("git branch -M main") -- optional
+
+            local create_cmd = string.format('gh repo create "%s" %s --source=. --remote=origin --push', repo, vis_flag)
+            if not run_cmd(create_cmd) then
+              return
+            end
+
+            run_cmd(string.format('gh repo view "%s" --web', repo))
+            print("GitHub repo created and pushed.")
+          end)
+        end)
       end)
-    end)
-  end)
-end, { desc = "GitHub: Create + Push Repo (SSH)", unpack(opts) })
 
+    -- === Option 2: Init Local Git Only ===
+    elseif choice == "Init Local Git Repo Only" then
+      init_local_git()
+    end
+  end)
+end, { desc = "Git: Init Local or Create GitHub Repo", unpack(opts) })
+
+-- <leader>gD: Delete GitHub repo + local .git, or just .git
 map("n", "<leader>gD", function()
   if not is_git_repo() then
-    print("Not a git repository.")
+    local confirm = vim.fn.input("No .git folder. Nothing to delete. Press Enter to continue.")
     return
   end
 
   local remote_url = vim.fn.system("git config --get remote.origin.url"):gsub("\n", "")
-  if remote_url == "" then
-    print("No remote origin set.")
-    return
-  end
-
   local repo = remote_url:match("github.com[:/](.-)%.git$")
-  if not repo then
-    print("Failed to parse remote URL.")
-    return
-  end
 
-  local confirm = vim.fn.input("Are you sure you want to delete '" .. repo .. "' from GitHub? (yes/NO): ")
-  if confirm:lower() ~= "yes" then
-    print("Canceled: User did not confirm.")
-    return
-  end
-
-  local result = vim.fn.systemlist("gh repo delete " .. repo .. " --yes")
-  if vim.v.shell_error ~= 0 then
-    print("Failed to delete repo:")
-    print(table.concat(result, "\n"))
+  local confirm_msg
+  if repo then
+    confirm_msg = string.format("Delete GitHub repo '%s' AND local .git? (yes/NO): ", repo)
   else
-    vim.fn.delete(".git", "rf")
-    print("Repo '" .. repo .. "' deleted from GitHub and local .git removed.")
+    confirm_msg = "No remote GitHub repo. Delete local .git? (yes/NO): "
+  end
+
+  local confirm = vim.fn.input(confirm_msg)
+  if confirm:lower() ~= "yes" then
+    print("Canceled.")
+    return
+  end
+
+  -- Delete GitHub repo if available
+  if repo then
+    local result = vim.fn.systemlist("gh repo delete " .. repo .. " --yes")
+    if vim.v.shell_error ~= 0 then
+      print("Failed to delete GitHub repo:")
+      print(table.concat(result, "\n"))
+    else
+      print("GitHub repo deleted.")
+    end
+  end
+
+  -- Always delete local .git
+  if vim.fn.delete(".git", "rf") == 0 then
+    print("Local .git folder removed.")
+  else
+    print("Failed to remove local .git folder.")
   end
 end, { desc = "GitHub: Delete Remote Repo + .git", unpack(opts) })
